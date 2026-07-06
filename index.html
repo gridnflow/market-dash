@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>마켓 대시 — Market Dash</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #b8e3f5;
+    font-family: "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", sans-serif; }
+  #app { position: fixed; inset: 0; }
+  canvas { display: block; }
+
+  .hud { position: fixed; pointer-events: none; user-select: none; }
+
+  #hud-top {
+    top: 16px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 12px; align-items: stretch;
+  }
+  .hud-card {
+    background: rgba(30, 36, 52, 0.75); color: #fff; border-radius: 14px;
+    padding: 8px 18px; text-align: center; backdrop-filter: blur(6px);
+    border: 1px solid rgba(255,255,255,0.15); min-width: 96px;
+  }
+  .hud-card .label { font-size: 11px; opacity: 0.65; letter-spacing: 1px; }
+  .hud-card .value { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  #hearts .value { letter-spacing: 2px; font-size: 20px; }
+  #combo .value { color: #ffd54a; }
+
+  #carry {
+    bottom: 22px; left: 50%; transform: translateX(-50%);
+    background: rgba(30, 36, 52, 0.75); color: #fff; border-radius: 999px;
+    padding: 9px 22px; font-size: 15px; font-weight: 700;
+    border: 1px solid rgba(255,255,255,0.15); backdrop-filter: blur(6px);
+    white-space: nowrap;
+  }
+  #carry .item { color: #8ef0a2; }
+
+  #toast {
+    top: 30%; left: 50%; transform: translate(-50%, -50%) scale(0.8);
+    font-size: 40px; font-weight: 900; color: #fff;
+    text-shadow: 0 3px 14px rgba(0,0,0,0.45); opacity: 0;
+    transition: opacity 0.15s, transform 0.15s; text-align: center;
+  }
+  #toast.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+
+  .overlay {
+    position: fixed; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 18px;
+    background: rgba(18, 24, 38, 0.78); backdrop-filter: blur(8px);
+    color: #fff; z-index: 10; text-align: center; padding: 20px;
+  }
+  .overlay h1 { font-size: 52px; font-weight: 900; letter-spacing: -1px; }
+  .overlay h1 .accent { color: #ffd54a; }
+  .overlay p { font-size: 16px; line-height: 1.8; opacity: 0.9; max-width: 520px; }
+  .overlay .keys { font-size: 14px; opacity: 0.75; }
+  .overlay kbd {
+    background: rgba(255,255,255,0.14); border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 6px; padding: 2px 8px; font-family: inherit; font-weight: 700;
+  }
+  .overlay button {
+    pointer-events: auto; cursor: pointer; border: none; border-radius: 999px;
+    padding: 14px 44px; font-size: 20px; font-weight: 800; font-family: inherit;
+    background: #ffd54a; color: #2b2410; box-shadow: 0 6px 24px rgba(255, 213, 74, 0.35);
+    transition: transform 0.1s;
+  }
+  .overlay button:hover { transform: scale(1.05); }
+  #final-score { font-size: 30px; font-weight: 900; color: #ffd54a; }
+  .hidden { display: none !important; }
+
+  #avatar-picker {
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 8px;
+    max-width: 560px; pointer-events: auto;
+  }
+  #avatar-picker .avatar {
+    width: 56px; height: 56px; border-radius: 12px; cursor: pointer;
+    background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.2);
+    padding: 3px; transition: transform 0.1s, border-color 0.1s;
+    image-rendering: pixelated;
+  }
+  #avatar-picker .avatar:hover { transform: scale(1.12); }
+  #avatar-picker .avatar.selected {
+    border-color: #ffd54a; background: rgba(255, 213, 74, 0.25);
+    box-shadow: 0 0 14px rgba(255, 213, 74, 0.45);
+  }
+  .picker-label { font-size: 14px; opacity: 0.8; margin-bottom: -8px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<div class="hud" id="hud-top">
+  <div class="hud-card" id="score"><div class="label">점수</div><div class="value">0</div></div>
+  <div class="hud-card" id="combo"><div class="label">콤보</div><div class="value">×0</div></div>
+  <div class="hud-card" id="served"><div class="label">손님</div><div class="value">0</div></div>
+  <div class="hud-card" id="hearts"><div class="label">기회</div><div class="value">❤️❤️❤️</div></div>
+</div>
+
+<div class="hud" id="carry">🧺 빈손 — 손님 말풍선의 물건을 찾아가세요!</div>
+<div class="hud" id="toast"></div>
+
+<div class="overlay" id="start-screen">
+  <h1>🛒 마켓 <span class="accent">대시</span></h1>
+  <p>당신은 오늘 첫 출근한 미니마켓 알바생!<br>
+  손님 머리 위 말풍선에 뜬 물건을 매대에서 집어<br>
+  인내심이 바닥나기 전에 가져다주세요.</p>
+  <p class="keys">
+    <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> 화살표키 — 이동 &nbsp;
+    <kbd>Shift</kbd> — 전력질주<br>
+    매대·손님에게 <b>가까이 가면 자동으로</b> 집고 전달합니다 &nbsp; <kbd>Q</kbd> — 내려놓기<br>
+    (WASD도 가능하지만 <b>영문 입력 상태</b>에서만 동작해요)
+  </p>
+  <p class="keys">손님을 3명 놓치면 게임 오버! 🥲</p>
+  <p class="picker-label">🧑‍💼 아바타를 골라주세요</p>
+  <div id="avatar-picker"></div>
+  <button id="btn-start">개점하기</button>
+</div>
+
+<div class="overlay hidden" id="gameover-screen">
+  <h1>😵 폐점...</h1>
+  <div id="final-score">0점</div>
+  <p id="final-detail"></p>
+  <button id="btn-restart">다시 도전</button>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "./lib/three.module.js" } }
+</script>
+<script type="module" src="./game.js"></script>
+</body>
+</html>
